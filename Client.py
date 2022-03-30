@@ -6,7 +6,6 @@ import time
 import threading
 import select
 import traceback
-from cryptography.fernet import Fernet
 
 
 class Server(threading.Thread):
@@ -32,30 +31,30 @@ class Server(threading.Thread):
 class Client(threading.Thread):
     def connect(self, host, port):
         self.sock.connect((host, port))
+        print("connected ", host, port)
 
-    def client(self, host, port, msg):
+    def client(self, msg):
         sent = self.sock.send(msg)
+        print("sended\n", msg)
         # print "Sent\n"
 
     def run(self):
-        privateKey = Fernet.generate_key()
+        print("Client started")
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
         host = "127.0.0.1"
         port = 5535
-
-        print("Connecting\n")
         self.connect(host, port)
-        print("Connected\n")
+
         user_name = input("Enter the User Name to be Used\n>>")
         receive = self.sock
         time.sleep(1)
+
         srv = Server()
         srv.initialise(receive)
         srv.daemon = True
-        print("Starting service")
         srv.start()
         while 1:
             # print "Waiting for message\n"
@@ -67,7 +66,7 @@ class Client(threading.Thread):
             # print "Sending\n"
             msg = user_name + ": " + msg
             data = msg.encode()
-            self.client(host, port, data)
+            self.client(data)
         return 1
 
 

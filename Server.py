@@ -13,7 +13,9 @@ SENT_BY = {}
 
 
 class Server(threading.Thread):
-    def init(self):
+    def __init__(self):
+        threading.Thread.__init__(self)
+
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -29,10 +31,10 @@ class Server(threading.Thread):
             for sock in read:
                 if sock == self.sock:
                     sockfd, addr = self.sock.accept()
-                    print(str(addr))
+                    print("--- New connection from %s ---" % str(addr))
 
                     SOCKET_LIST.append(sockfd)
-                    print(SOCKET_LIST[len(SOCKET_LIST) - 1])
+                    print("peer socket", SOCKET_LIST[len(SOCKET_LIST) - 1])
 
                 else:
                     try:
@@ -68,8 +70,8 @@ class handle_connections(threading.Thread):
 
 if __name__ == "__main__":
     srv = Server()
-    srv.init()
     srv.start()
-    print(SOCKET_LIST)
+    print("Socket list", SOCKET_LIST)
+    
     handle = handle_connections()
     handle.start()
