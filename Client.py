@@ -6,20 +6,26 @@ import time
 import threading
 import select
 import traceback
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
 
 
 class Server(threading.Thread):
-    def initialise(self, receive):
+    def __init__(self, receive):
+        threading.Thread.__init__(self)
         self.receive = receive
 
     def run(self):
+
         lis = []
         lis.append(self.receive)
         while 1:
             read, write, err = select.select(lis, [], [])
+
             for item in read:
                 try:
                     s = item.recv(1024)
+
                     if s != "":
                         chunk = s
                         print(chunk.decode() + "\n>>")
@@ -29,12 +35,26 @@ class Server(threading.Thread):
 
 
 class Client(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+        # create rsa keys
+        self.key = rsa.generate_private_key(public_exponent=65537, key_size=512)
+        self.public_key = self.key.public_key()
+        self.start()
+
     def connect(self, host, port):
+        # Send the public key to the server
         self.sock.connect((host, port))
+        self.sock.send(
+            self.public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+        )
         print("connected ", host, port)
 
     def client(self, msg):
-        sent = self.sock.send(msg)
+        self.sock.send(msg)
         print("sended\n", msg)
         # print "Sent\n"
 
@@ -52,10 +72,10 @@ class Client(threading.Thread):
         receive = self.sock
         time.sleep(1)
 
-        srv = Server()
-        srv.initialise(receive)
+        srv = Server(receive)
         srv.daemon = True
         srv.start()
+
         while 1:
             # print "Waiting for message\n"
             msg = input(">>")
@@ -73,4 +93,3 @@ class Client(threading.Thread):
 if __name__ == "__main__":
     print("Starting client")
     cli = Client()
-    cli.start()

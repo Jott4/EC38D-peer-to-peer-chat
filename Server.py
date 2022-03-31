@@ -11,6 +11,8 @@ SOCKET_LIST = []
 TO_BE_SENT = []
 SENT_BY = {}
 
+PUBLIC_KEYS_LIST = []
+
 
 class Server(threading.Thread):
     def __init__(self):
@@ -24,10 +26,10 @@ class Server(threading.Thread):
         SOCKET_LIST.append(self.sock)
         print("Server started on port 5535")
 
-
     def run(self):
         while 1:
             read, write, err = select.select(SOCKET_LIST, [], [], 0)
+
             for sock in read:
                 if sock == self.sock:
                     sockfd, addr = self.sock.accept()
@@ -52,26 +54,35 @@ class Server(threading.Thread):
 class handle_connections(threading.Thread):
     def run(self):
         while 1:
-            read, write, err = select.select([], SOCKET_LIST, [], 0)
-            for items in TO_BE_SENT:
-                for s in write:
-                    try:
-                        if str(s.getpeername()) == SENT_BY[items]:
-                            print("Ignoring %s" % (str(s.getpeername())))
-                            continue
-                        print("Sending to %s" % (str(s.getpeername())))
-                        s.send(items)
+            read, sockets_arr, err = select.select([], SOCKET_LIST, [], 0)
 
+            for message in TO_BE_SENT:
+                if "-----BEGIN PUBLIC KEY-----" in message.decode():
+                    PUBLIC_KEYS_LIST.append(message)
+                    print("--- Public Key Received ---")
+                    print(message)
+                    print("--- Public Key Received ---")
+
+                for socket in sockets_arr:
+                    try:
+                        if str(socket.getpeername()) == SENT_BY[message]:
+                            print(len(PUBLIC_KEYS_LIST))
+                            print(len(SOCKET_LIST[1:]))
+
+                            print("Ignoring %s" % (str(socket.getpeername())))
+                            continue
+                        print("Sending to %s" % (str(socket.getpeername())))
+                        socket.send(message)
                     except:
                         traceback.print_exc(file=sys.stdout)
-                TO_BE_SENT.remove(items)
-                del SENT_BY[items]
+                TO_BE_SENT.remove(message)
+                del SENT_BY[message]
 
 
 if __name__ == "__main__":
     srv = Server()
     srv.start()
     print("Socket list", SOCKET_LIST)
-    
+
     handle = handle_connections()
     handle.start()
