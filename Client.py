@@ -1,13 +1,23 @@
 #! /usr/bin/env python
 
+from ast import Bytes
 import socket
 import sys
 import time
 import threading
 import select
 import traceback
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
+
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.PublicKey import RSA
+from Crypto import Random
+
+random_generator = Random.new().read
+
+
+RSA_KEY = RSA.generate(1024, random_generator)
 
 
 class Server(threading.Thread):
@@ -16,7 +26,6 @@ class Server(threading.Thread):
         self.receive = receive
 
     def run(self):
-
         lis = []
         lis.append(self.receive)
         while 1:
@@ -24,11 +33,12 @@ class Server(threading.Thread):
 
             for item in read:
                 try:
-                    s = item.recv(1024)
+                    byte_encoded_msg = item.recv(1024)
 
-                    if s != "":
-                        chunk = s
-                        print(chunk.decode() + "\n>>")
+                    if byte_encoded_msg != "":
+                        decryptor = PKCS1_OAEP.new(RSA_KEY)
+                        decrypted = decryptor.decrypt(byte_encoded_msg)
+                        print(decrypted.decode() + "\n>>")
                 except:
                     traceback.print_exc(file=sys.stdout)
                     break
@@ -37,25 +47,34 @@ class Server(threading.Thread):
 class Client(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
+        # get server public key
+        with open("./public-server-key.pem", "rb") as key_file:
+            self.server_public_key = serialization.load_pem_public_key(key_file.read())
+
         # create rsa keys
-        self.key = rsa.generate_private_key(public_exponent=65537, key_size=512)
+        self.key = RSA_KEY
         self.public_key = self.key.public_key()
+
         self.start()
 
     def connect(self, host, port):
-        # Send the public key to the server
         self.sock.connect((host, port))
-        self.sock.send(
-            self.public_key.public_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PublicFormat.SubjectPublicKeyInfo,
-            )
-        )
+        # Send the public key to the server
+        self.sock.send(self.public_key.exportKey(format="PEM", passphrase=None, pkcs=1))
         print("connected ", host, port)
 
     def client(self, msg):
-        self.sock.send(msg)
-        print("sended\n", msg)
+        cipher = self.server_public_key.encrypt(
+            msg,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None,
+            ),
+        )
+
+        self.sock.send(cipher)
+
         # print "Sent\n"
 
     def run(self):
@@ -85,6 +104,7 @@ class Client(threading.Thread):
                 continue
             # print "Sending\n"
             msg = user_name + ": " + msg
+
             data = msg.encode()
             self.client(data)
         return 1
